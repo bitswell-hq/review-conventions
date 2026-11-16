@@ -1,0 +1,123 @@
+name: Review conventions
+
+# Reusable workflow: checks a pull request's title, description and commits
+# against the caller's config (README.md "Adopting it"). Call it from a
+# workflow triggered by `pull_request` with types
+# [opened, edited, synchronize, reopened, ready_for_review]; `edited` re-runs
+# it when the title or body is fixed.
+#
+# `mode` is the one switch: `warn` reports findings as annotations and a job
+# summary and never fails; `block` fails the job on any finding (a draft PR
+# never fails). Make the job a required check to block merges.
+#
+# The title and body are read from the event payload file, never
+# interpolated into a shell. The job holds a read-only token and no secrets,
+# so fork PRs are safe.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "warn (report only) or block (fail on any finding)"
+        type: string
+        default: warn
+      config:
+        description: "Path of the config file in the calling repository"
+        type: string
+        default: .github/review-conventions.json
+      conventions-ref:
+        description: "Ref of the review-conventions repository to run. Default: the ref this workflow was called at (job.workflow_sha), else v1"
+        type: string
+        default: ""
+      conventions-repository:
+        description: "owner/name of the review-conventions repository. Default: the one this workflow was called from"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  review-conventions:
+    name: Title, description and commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      REVIEW_CONVENTIONS_MODE: ${{ inputs.mode }}
+    steps:
+      - name: Check the event and mode
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          case "$REVIEW_CONVENTIONS_MODE" in warn|block) ;; *)
+            echo "::error title=review-conventions::mode must be warn or block, not '$REVIEW_CONVENTIONS_MODE'"; exit 1 ;;
+          esac
+          # Not pull_request_target: the config, templates and any rule module
+          # come from the PR head, which must not run with a privileged token.
+          if [ "$EVENT" != pull_request ]; then
+            echo "::error title=review-conventions::needs a pull_request event, not $EVENT"; exit 1
+          fi
+
+      # A called workflow runs in the caller's checkout, so it fetches its own
+      # code. job.workflow_ref / job.workflow_sha name the called workflow on
+      # current runners; they are compared with github.workflow_ref so an
+      # older runner that reports the caller instead falls back to the inputs.
+      - name: Locate review-conventions
+        id: self
+        env:
+          JOB_WORKFLOW_REF: ${{ job.workflow_ref }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          CALLER_WORKFLOW_REF: ${{ github.workflow_ref }}
+          INPUT_REF: ${{ inputs.conventions-ref }}
+          INPUT_REPOSITORY: ${{ inputs.conventions-repository }}
+        run: |
+          repo="" ref=""
+          if [ -n "$JOB_WORKFLOW_REF" ] && [ "$JOB_WORKFLOW_REF" != "$CALLER_WORKFLOW_REF" ]; then
+            repo="$(printf '%s' "$JOB_WORKFLOW_REF" | cut -d/ -f1-2)"
+            ref="${JOB_WORKFLOW_SHA:-${JOB_WORKFLOW_REF##*@}}"
+          fi
+          repo="${INPUT_REPOSITORY:-${repo:-bitswell-hq/review-conventions}}"
+          ref="${INPUT_REF:-${ref:-v1}}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "job.workflow_ref=${JOB_WORKFLOW_REF:-<unset>} github.workflow_ref=$CALLER_WORKFLOW_REF"
+          echo "review-conventions: $repo@$ref, mode $REVIEW_CONVENTIONS_MODE"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The PR head itself (the merge ref is missing while the PR
+          # conflicts), with the history back to the base.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ steps.self.outputs.repository }}
+          ref: ${{ steps.self.outputs.ref }}
+          path: .review-conventions
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # Each step reports on its own; later steps run even when an earlier
+      # one fails in block mode, so one run shows every finding.
+      - name: PR description
+        if: ${{ !cancelled() }}
+        env:
+          CONFIG: ${{ inputs.config }}
+        run: node .review-conventions/bin/review-conventions.mjs body --config "$CONFIG"
+
+      - name: PR title
+        if: ${{ !cancelled() }}
+        env:
+          CONFIG: ${{ inputs.config }}
+        run: node .review-conventions/bin/review-conventions.mjs title --config "$CONFIG"
+
+      - name: Commit messages (commitlint)
+        if: ${{ !cancelled() }}
+        env:
+          CONFIG: ${{ inputs.config }}
+        run: node .review-conventions/bin/review-conventions.mjs commits --config "$CONFIG"
