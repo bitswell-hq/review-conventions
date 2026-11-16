@@ -1,0 +1,42 @@
+{
+  "$comment": "This repository's own conventions; README.md \"Config reference\" documents every key.",
+  "header": {
+    "scopes": [
+      "validator",
+      "workflow",
+      "templates",
+      "commitlint",
+      "docs",
+      "ci",
+      "deps"
+    ]
+  },
+  "body": {
+    "templates": "templates"
+  },
+  "skip": {
+    "authors": [
+      "dependabot[bot]",
+      "github-actions[bot]"
+    ]
+  },
+  "rules": [
+    {
+      "id": "validator-tests",
+      "when": {
+        "paths": [
+          "src/**",
+          "bin/**",
+          "commitlint.config.mjs"
+        ],
+        "ignorePaths": [
+          "**/*.md"
+        ]
+      },
+      "requireFiles": [
+        "test/**"
+      ],
+      "message": "A change to the validator comes with a test or fixture"
+    }
+  ]
+}
