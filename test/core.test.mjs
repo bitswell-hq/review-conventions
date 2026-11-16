@@ -169,3 +169,22 @@ test("README examples: drawing_board's rules as config", async () => {
   assert.deepEqual(check(body("x", "None: layout only, no rule touched here."), ["crates/game-core/src/fleet.rs"]), ["rulebook-updated"]);
   assert.deepEqual(check(body("x", "Maybe"), []), ["gameplay-impact"]);
 });
+
+test("module views: body revisions, commit sha and lazy files", async () => {
+  const { checkBody } = await import("../src/core.mjs");
+  const probe = await loadContext(root, "", normalizeConfig({ body: { templates: "templates" }, module: "test/fixtures/probe-module.mjs", repo: { probe: true } }));
+  const seen = (findings, rule) => JSON.parse(findings.find((f) => f.rule === rule).message);
+  assert.deepEqual(seen(checkBody({ body: "x", files: ["a"], base: "b1", head: "h1" }, probe), "probe-body"), { base: "b1", head: "h1", files: ["a"] });
+  assert.deepEqual(seen(checkBody({ body: "x" }, probe), "probe-body"), { base: null, head: null, files: [] }, "undefined without a base");
+
+  let calls = 0;
+  const files = () => (calls++, ["src/x.rs"]);
+  assert.deepEqual(seen(checkCommitMessage("fix: x\n\nWhy: y.", probe, { sha: "abc", files }), "probe-commit"), { sha: "abc", files: ["src/x.rs"] });
+  assert.equal(calls, 1);
+  assert.deepEqual(seen(checkCommitMessage("fix: x\n\nWhy: y.", probe), "probe-commit"), { sha: null, files: null }, "both may be undefined");
+  assert.deepEqual(seen(checkCommitMessage("fix: x\n\nWhy: y.", probe, { files: ["a"] }), "probe-commit"), { sha: null, files: ["a"] }, "a list works too");
+
+  calls = 0;
+  checkCommitMessage("fix: x\n\nWhy: y.", ctx, { sha: "abc", files });
+  assert.equal(calls, 0, "files is not computed unless a rule reads it");
+});

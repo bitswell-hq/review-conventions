@@ -10,16 +10,29 @@
 // Environment: REVIEW_CONVENTIONS_ROOT (default: the working directory),
 // REVIEW_CONVENTIONS_CONFIG (relative to the root, default
 // .github/review-conventions.json), REVIEW_CONVENTIONS_MODE (warn | block;
-// warn reports at level 1, block at level 2, which fails).
+// warn reports at level 1, block at level 2, which fails),
+// REVIEW_CONVENTIONS_COMMITS (optional: a JSON file mapping each message to
+// its commit SHAs, written by `review-conventions commits`; it gives a
+// commit's view its `sha` and `files`).
 
+import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkCommitMessage, loadContext } from "./src/core.mjs";
+import { commitFiles, messageKey } from "./src/git.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(process.env.REVIEW_CONVENTIONS_ROOT ?? process.cwd());
 const ctx = await loadContext(root, process.env.REVIEW_CONVENTIONS_CONFIG ?? ".github/review-conventions.json");
 const level = process.env.REVIEW_CONVENTIONS_MODE === "block" ? 2 : 1;
+const shas = process.env.REVIEW_CONVENTIONS_COMMITS ? JSON.parse(readFileSync(process.env.REVIEW_CONVENTIONS_COMMITS, "utf8")) : {};
+
+// A message shared by two commits in the range is ambiguous: its view gets
+// neither sha nor files rather than another commit's.
+const commitOf = (raw) => {
+  const [sha, ...others] = shas[messageKey(raw)] ?? [];
+  return sha && !others.length ? { sha, files: () => commitFiles(root, sha) } : {};
+};
 
 const CORE_RULES = [
   "header-empty",
@@ -43,7 +56,7 @@ const CORE_RULES = [
 // commitlint calls each rule separately; check each message once.
 const cache = new Map();
 const findingsOf = (raw) => {
-  if (!cache.has(raw)) cache.set(raw, checkCommitMessage(raw, ctx));
+  if (!cache.has(raw)) cache.set(raw, checkCommitMessage(raw, ctx, commitOf(raw)));
   return cache.get(raw);
 };
 // `repo` reports the caller's own commit rules (config "rules" and "module").

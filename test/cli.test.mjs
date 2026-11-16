@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, writeFileSync } from "node:fs";
+import { messageKey } from "../src/git.mjs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -113,4 +114,58 @@ test("commits: commitlint with the shared config over merge-base..head", { timeo
   assert.equal(block.status, 1, block.out);
   const clean = run(["commits", "--base", git("rev-parse", "HEAD~1"), "--head", head, "--mode", "block"]);
   assert.equal(clean.status, 0, clean.out);
+});
+
+// The probe module (test/fixtures/probe-module.mjs) reports the view it got.
+const probeConfig = join(repo, "probe.json");
+writeFileSync(probeConfig, JSON.stringify({ module: join(home, "test/fixtures/probe-module.mjs"), repo: { probe: true } }));
+const probed = (out, rule) => [...out.matchAll(new RegExp(`\\[${rule}\\] (?:"[^"]*": )?(\\{.*\\})$`, "gm"))].map((m) => JSON.parse(m[1]));
+
+test("body view: merge-base and head SHAs, undefined without --base", () => {
+  git("checkout", "-q", "--", ".");
+  git("checkout", "-q", "-b", "side", base);
+  writeFileSync(join(repo, "side.txt"), "x");
+  git("add", "side.txt");
+  git("commit", "-q", "-m", "chore: side\n\nWhy: moves main's tip past the merge base.");
+  const tip = git("rev-parse", "HEAD");
+  git("checkout", "-q", "main");
+  const r = run(["body", "--config", "probe.json", "--body-file", bodyFile, "--base", tip, "--head", "main"]);
+  const [view] = probed(r.out, "probe-body");
+  assert.deepEqual(view, { base, head, files: ["api.txt", "b.txt"] }, r.out);
+  const none = run(["body", "--config", "probe.json", "--body-file", bodyFile]);
+  assert.deepEqual(probed(none.out, "probe-body"), [{ base: null, head: null, files: [] }]);
+});
+
+test("commit-msg view: the staged files, no sha", () => {
+  writeFileSync(join(repo, "staged.txt"), "x");
+  git("add", "staged.txt");
+  const msg = join(repo, "MSG");
+  writeFileSync(msg, "fix: x\n\nWhy: y.\n");
+  const r = run(["commit-msg", msg, "--config", "probe.json"]);
+  assert.deepEqual(probed(r.out, "probe-commit"), [{ sha: null, files: ["staged.txt"] }], r.out);
+  git("reset", "-q", "staged.txt");
+});
+
+test("commits view: each commit's sha and files through commitlint; a repeated message gets neither", { timeout: 180_000 }, () => {
+  const r = run(["commits", "--config", "probe.json", "--base", base, "--head", head]);
+  const views = probed(r.out, "probe-commit");
+  const shas = git("rev-list", "--reverse", `${base}..${head}`).split("\n");
+  assert.deepEqual(views.map((v) => v.sha).sort(), [...shas].sort(), r.out);
+  assert.deepEqual(views.find((v) => v.sha === shas[0]).files, ["api.txt"]);
+  assert.deepEqual(views.find((v) => v.sha === shas[1]).files, ["b.txt"]);
+
+  git("checkout", "-q", "-b", "dupes", head);
+  for (const f of ["d1.txt", "d2.txt"]) {
+    writeFileSync(join(repo, f), "x");
+    git("add", f);
+    git("commit", "-q", "-m", "docs: same message\n\nWhy: twice.");
+  }
+  const dup = run(["commits", "--config", "probe.json", "--base", head, "--head", "dupes"]);
+  const none = { sha: null, files: null };
+  assert.deepEqual(probed(dup.out, "probe-commit"), [none, none], `the message is ambiguous, so neither commit gets another's sha\n${dup.out}`);
+  git("checkout", "-q", "main");
+});
+
+test("message keys ignore line endings and trailing whitespace", () => {
+  assert.equal(messageKey("fix: x\r\n\r\nWhy: y.\n\n"), "fix: x\n\nWhy: y.");
 });

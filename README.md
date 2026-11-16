@@ -250,10 +250,16 @@ Examples, from the repositories that use this:
 
 **Rules that need code** go in `module`. It is an `.mjs` file in your repository that exports `createRules({ root, config })`, where `config` is the config's `repo` object. `createRules` returns `{ body(view), commit(view) }`, and each function returns `[{ rule, message }]`.
 
-- **Body view:** `{ body, files, draft, template, title, sections, section(heading) }`. `title` is the parsed header `{ type, scope, bang, subject }`, and `section(heading)` returns the answer text without comments.
-- **Commit view:** `{ type, bang, header, body, prose, trailers }`.
+- **Body view:** `{ body, files, base, head, draft, template, title, sections, section(heading) }`.
+  - `files` is the paths changed between `base` and `head`.
+  - `base` is the merge-base SHA of the PR's base and head, and `head` is the head SHA. A rule can hand them to a repository script, for example "did a locked dependency this contract links move between `base` and `head`?". Both are `undefined` when the check runs without a base (`body` with no `--base` and no event).
+  - `title` is the parsed header `{ type, scope, bang, subject }`, and `section(heading)` returns the answer text without comments.
+- **Commit view:** `{ type, bang, header, body, prose, trailers, sha, files }`.
+  - `sha` is the commit's SHA and `files` the paths it changed (`git diff-tree`). In the `commit-msg` hook, `files` is the staged paths and `sha` is `undefined`.
+  - Either may be `undefined`: a commit linted outside `review-conventions commits`, or a message shared by two commits in the range, which is ambiguous and so gets neither. Rules should treat `undefined` as "unknown" and skip.
+  - `files` is computed only when a rule reads it.
 
-For example, perch's "a contract's release scope changed ⇒ `## Wasm impact`" parses its `release.yml`, so it belongs in a module.
+For example, perch's "a contract's release scope changed ⇒ `## Wasm impact`" parses its `release.yml` and asks a script about `base..head`, so it belongs in a module. So does "a `chore` commit that changes a contract's wasm inputs needs a `Wasm:` trailer", which reads the commit's `files`.
 
 ## Local use
 

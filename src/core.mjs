@@ -124,7 +124,8 @@ export function matchTemplate(headings, templates) {
 }
 
 // The PR description. `pr`: { body, files (changed paths), title (string),
-// draft }.
+// draft, base, head }. `base` is the merge-base SHA the files were diffed
+// from and `head` the head SHA; both undefined when the caller has no base.
 export function checkBody(pr, ctx) {
   const findings = [];
   const add = (rule, message) => findings.push({ rule, message });
@@ -164,6 +165,8 @@ export function checkBody(pr, ctx) {
   const view = {
     body,
     files,
+    base: pr.base,
+    head: pr.head,
     draft: Boolean(pr.draft),
     template: template.name,
     title: parseHeader(pr.title ?? "", config),
@@ -181,7 +184,10 @@ export function checkBody(pr, ctx) {
 // ---------------------------------------------------------------- commits
 
 // One commit message, held to the PR description's structure in miniature.
-export function checkCommitMessage(message, ctx) {
+// `commit` is what the caller knows beyond the message: { sha, files }, where
+// `files` is a list or a function returning one (called at most once, and
+// only if a rule reads view.files). Either may be absent.
+export function checkCommitMessage(message, ctx, commit = {}) {
   const { config } = ctx;
   const c = config.commits;
   const { header, body, prose, trailers } = parseMessage(message);
@@ -226,7 +232,12 @@ export function checkCommitMessage(message, ctx) {
     add("trailer-breaking", `A "!" subject needs a "${canonical}:" trailer saying what breaks and how to migrate.`);
   }
 
-  const view = { type, bang: parsed?.bang ?? false, header, body, prose, trailers };
+  const view = { type, bang: parsed?.bang ?? false, header, body, prose, trailers, sha: commit.sha };
+  let files = commit.files;
+  Object.defineProperty(view, "files", {
+    enumerable: true,
+    get: () => (typeof files === "function" ? (files = files()) : files),
+  });
   findings.push(...evaluateCommitRules(ctx.rules, view));
   findings.push(...(ctx.module.commit?.(view) ?? []));
   return findings;

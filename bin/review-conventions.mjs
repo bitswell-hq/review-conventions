@@ -14,12 +14,14 @@
 // pull_request payload, default $GITHUB_EVENT_PATH). With an event, the
 // title, body, draft flag, base, head, author and branch come from it.
 
-import { spawnSync, execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { checkBody, checkCommitMessage, checkHeader, loadContext } from "../src/core.mjs";
+import { commitsIn, diffFiles, mergeBase, messageKey, revParse, stagedFiles } from "../src/git.mjs";
 import { failing, report } from "../src/report.mjs";
 
 const HOME = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,7 +51,6 @@ if (!["warn", "block"].includes(mode)) {
   process.exit(2);
 }
 const root = resolve(opts.root);
-const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
 function pullRequest() {
   const eventPath = opts.event ?? process.env.GITHUB_EVENT_PATH;
@@ -86,9 +87,13 @@ async function main() {
     const pr = pullRequest();
     const why = skipped(pr, ctx.config);
     if (why) return console.log(`PR description: skipped for ${why}.`), 0;
-    const files = pr.base ? git("diff", "--name-only", "--no-renames", `${pr.base}...${pr.head}`).split("\n").filter(Boolean) : [];
-    if (!pr.base) console.log("PR description: no --base, so rules tied to changed paths see no files.");
-    return report(checkBody({ ...pr, files }, ctx), { name: "PR description", mode, draft: pr.draft, help });
+    let revs = { base: undefined, head: undefined, files: [] };
+    if (pr.base) {
+      const head = revParse(root, pr.head);
+      const base = mergeBase(root, pr.base, head);
+      revs = { base, head, files: diffFiles(root, base, head) };
+    } else console.log("PR description: no --base, so rules tied to changed paths see no files.");
+    return report(checkBody({ ...pr, ...revs }, ctx), { name: "PR description", mode, draft: pr.draft, help });
   }
 
   if (command === "commits") {
@@ -96,7 +101,13 @@ async function main() {
     const why = skipped(pr, ctx.config);
     if (why) return console.log(`Commit messages: skipped for ${why}.`), 0;
     if (!pr.base) throw new Error("commits needs --base or a pull_request event");
-    const from = git("merge-base", pr.base, pr.head);
+    const from = mergeBase(root, pr.base, pr.head);
+    // commitlint hands its rules only the message text; this map lets the
+    // shared config give each commit's view its SHA (and so its files).
+    const shas = {};
+    for (const c of commitsIn(root, from, pr.head)) (shas[messageKey(c.message)] ??= []).push(c.sha);
+    const map = join(mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), "review-conventions-")), "commits.json");
+    writeFileSync(map, JSON.stringify(shas));
     const result = spawnSync(
       "npx",
       ["--yes", COMMITLINT, "--config", join(HOME, "commitlint.config.mjs"), "--cwd", root, "--from", from, "--to", pr.head],
@@ -107,6 +118,7 @@ async function main() {
           ...process.env,
           REVIEW_CONVENTIONS_ROOT: root,
           REVIEW_CONVENTIONS_CONFIG: opts.config,
+          REVIEW_CONVENTIONS_COMMITS: map,
           // A draft never fails; commitlint has no notion of drafts.
           REVIEW_CONVENTIONS_MODE: failing(mode, pr.draft) ? "block" : "warn",
         },
@@ -123,7 +135,7 @@ async function main() {
       .split("\n")
       .filter((l) => !l.startsWith("#"))
       .join("\n");
-    const findings = checkCommitMessage(message, ctx);
+    const findings = checkCommitMessage(message, ctx, { files: () => stagedFiles(root) });
     return report(findings, { name: "Commit message", mode, help: ctx.config.help ?? "See .gitmessage." });
   }
 
