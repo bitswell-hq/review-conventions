@@ -1,0 +1,18 @@
+ci: run the tests and check this repository's own PRs
+
+Why: nothing ran the validator's tests on a PR, and the reusable
+workflow was only exercised once a caller pinned a tag. Checking this
+repository's own PRs with the workflow from the same commit catches a
+broken workflow, or a check that misfires, before it is tagged.
+
+What changes: ci.yml runs npm test on every PR and on main.
+review-conventions-self.yml calls the reusable workflow in warn mode,
+with conventions-ref set to the PR head, so a change is checked by the
+code it changes. .github/review-conventions.json is this repository's
+config: its scopes, bot authors to skip, and one rule requiring a test
+or fixture with any validator change.
+
+Evidence: on https://github.com/bitswell-hq/review-conventions/pull/1
+both jobs passed; the self run logged job.workflow_ref naming the
+called workflow and "5 commit(s) checked, 0 finding(s)".
+

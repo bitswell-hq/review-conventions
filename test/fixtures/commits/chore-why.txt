@@ -1,0 +1,3 @@
+chore(deps): bump the lockfile
+
+Why: picks up the fix for CVE-2026-0001 in the yaml parser.

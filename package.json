@@ -1,0 +1,17 @@
+{
+  "name": "review-conventions",
+  "version": "1.0.0",
+  "description": "Shared PR description, PR title and commit message checks, templates and a reusable workflow",
+  "private": true,
+  "type": "module",
+  "repository": "github:bitswell-hq/review-conventions",
+  "bin": {
+    "review-conventions": "bin/review-conventions.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}

@@ -1,0 +1,3 @@
+docs: fix a typo
+
+Refs: #12

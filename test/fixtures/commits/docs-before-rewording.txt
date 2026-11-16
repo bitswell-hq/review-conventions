@@ -1,0 +1,2 @@
+docs: describe adoption, warn-to-block, versioning and config
+

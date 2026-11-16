@@ -1,0 +1,24 @@
+name: Review conventions (self)
+
+# This repository adopting itself, as README.md "Adopting it" describes, but
+# calling the reusable workflow from the same commit so a PR is checked by the
+# code it changes.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-conventions-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-conventions:
+    uses: ./.github/workflows/review-conventions.yml
+    with:
+      mode: warn
+      conventions-ref: ${{ github.event.pull_request.head.sha }}
+      conventions-repository: ${{ github.event.pull_request.head.repo.full_name }}

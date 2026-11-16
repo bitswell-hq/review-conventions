@@ -1,0 +1,75 @@
+{
+  "$comment": "Exercises every rule kind against the shared templates/. Paths are relative to the repository root.",
+  "header": {
+    "scopes": ["core", "contracts", "deploy", "docs", "deps"]
+  },
+  "commits": {
+    "bodyTypes": ["feat", "fix", "perf", "refactor"],
+    "requireWhy": true
+  },
+  "body": {
+    "templates": "templates"
+  },
+  "skip": {
+    "authors": ["github-actions[bot]"],
+    "branches": ["release/"]
+  },
+  "rules": [
+    {
+      "id": "contract-sections",
+      "when": { "paths": ["contracts/"], "notTemplate": ["mechanical.md"] },
+      "requireSections": ["Security impact", "Invariants"],
+      "message": "Security-relevant paths changed"
+    },
+    {
+      "id": "invariant-ids",
+      "section": ["Security impact", "Invariants"],
+      "references": {
+        "file": "test/fixtures/docs/INVARIANTS.md",
+        "definitions": "^\\| ([A-Z]+\\d+) \\|",
+        "pattern": "\\b([A-Z]{1,2}\\d{1,3})\\b",
+        "onlyKnownPrefixes": true
+      }
+    },
+    {
+      "id": "evidence-kind",
+      "when": { "sections": { "Invariants": "\\S" } },
+      "section": "Invariants",
+      "match": "\\b(Mocked|Enforcing|Real-proof|Review)\\b",
+      "allowNone": true
+    },
+    {
+      "id": "deployment-impact",
+      "when": { "paths": ["deploy/**"], "ignorePaths": ["**/*.md"] },
+      "section": "Deployment impact",
+      "match": "\\|",
+      "allowNone": 20,
+      "message": "Deploy scripts changed: give the before/after table"
+    },
+    {
+      "id": "deployed-record",
+      "when": [{ "paths": ["deploy/**/*.sh"] }, { "sections": { "Deployment impact": "^Changed" } }],
+      "requireFiles": ["docs/DEPLOYED.md"]
+    },
+    {
+      "id": "breaking-explained",
+      "when": { "breaking": true },
+      "section": "After merge",
+      "notMatch": "^(None|Nothing)\\b",
+      "message": "A breaking title needs migration steps"
+    },
+    {
+      "id": "security-trailer",
+      "scope": "commit",
+      "trailer": "Security",
+      "references": {
+        "file": "test/fixtures/docs/INVARIANTS.md",
+        "definitions": "^\\| ([A-Z]+\\d+) \\|",
+        "pattern": "\\b([A-Z]{1,2}\\d{1,3})\\b",
+        "onlyKnownPrefixes": true
+      },
+      "match": "\\b[A-Z]{1,2}\\d{1,3}\\b",
+      "allowNone": true
+    }
+  ]
+}

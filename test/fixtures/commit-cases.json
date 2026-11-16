@@ -1,0 +1,10 @@
+[
+  { "message": "ci-before-rewording.txt", "expect": ["body-why"], "why": "a body without the Why:/What changes: structure (PR 1's ci commit before rewording)" },
+  { "message": "docs-before-rewording.txt", "expect": ["body-required"], "why": "no body at all (PR 1's docs commit before rewording)" },
+  { "message": "ci-reworded.txt", "expect": [] },
+  { "message": "docs-reworded.txt", "expect": [] },
+  { "message": "chore-no-body.txt", "expect": ["body-required"], "why": "every type needs a body by default" },
+  { "message": "chore-why.txt", "expect": [], "why": "one Why: line is enough for a small change" },
+  { "message": "docs-trailers-only.txt", "expect": ["body-required"], "why": "trailers alone are not a body" },
+  { "message": "fix-why-trailers.txt", "expect": [] }
+]
