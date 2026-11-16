@@ -1,0 +1,5 @@
+fix(validator): skip merge commits
+
+Why: merge commits are not authored.
+
+Refs: #3

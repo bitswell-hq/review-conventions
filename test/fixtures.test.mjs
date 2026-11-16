@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { checkBody, loadContext } from "../src/core.mjs";
+import { checkBody, checkCommitMessage, loadContext } from "../src/core.mjs";
+import { normalizeConfig } from "../src/config.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(root, "test/fixtures");
@@ -21,10 +22,32 @@ for (const c of cases) {
   });
 }
 
-test("every fixture body is used", async () => {
+// Commit messages in test/fixtures/commits against this repository's own
+// config (.github/review-conventions.json): the self-check is what must fire.
+const own = await loadContext(root, ".github/review-conventions.json");
+const commitCases = JSON.parse(readFileSync(join(fixtures, "commit-cases.json"), "utf8"));
+for (const c of commitCases) {
+  test(`commit ${c.message}`, () => {
+    const message = readFileSync(join(fixtures, "commits", c.message), "utf8");
+    const findings = checkCommitMessage(message, own);
+    assert.deepEqual(findings.map((f) => f.rule).sort(), [...c.expect].sort(), `${c.why ?? ""}\n${JSON.stringify(findings, null, 2)}`);
+  });
+}
+
+test("a narrowed bodyTypes exempts a type from needing a body, not from structuring one", async () => {
+  const narrowed = await loadContext(root, "", normalizeConfig({ body: { templates: "templates" }, commits: { bodyTypes: ["feat", "fix", "perf", "ci", "docs"] } }));
+  const read = (f) => readFileSync(join(fixtures, "commits", f), "utf8");
+  assert.deepEqual(checkCommitMessage(read("chore-no-body.txt"), narrowed), []);
+  assert.deepEqual(checkCommitMessage("chore: x\n\nBumped it.", narrowed).map((f) => f.rule), ["body-why"]);
+  assert.deepEqual(checkCommitMessage(read("docs-before-rewording.txt"), narrowed).map((f) => f.rule), ["body-required"]);
+});
+
+test("every fixture body and commit message is used", async () => {
   const { readdirSync } = await import("node:fs");
-  const used = new Set(cases.map((c) => c.body));
-  assert.deepEqual(readdirSync(join(fixtures, "bodies")).filter((f) => !used.has(f)), []);
+  const used = new Set([...cases.map((c) => c.body), ...commitCases.map((c) => c.message)]);
+  for (const dir of ["bodies", "commits"]) {
+    assert.deepEqual(readdirSync(join(fixtures, dir)).filter((f) => !used.has(f)), [], dir);
+  }
 });
 
 test("the shared templates are their own good fixtures", async () => {

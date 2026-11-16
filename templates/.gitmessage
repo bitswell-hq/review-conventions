@@ -3,8 +3,9 @@
 # type(scope)!: imperative summary, lower-case, no full stop (<= 72 chars)
 #
 # The same structure as the PR description, in miniature. Wrap at 72.
-# A small, obvious commit needs only the subject; feat, fix and perf need
-# a body saying why.
+# Every commit, whatever its type, has a body with a Why: paragraph; add
+# What changes: and Evidence: where they say something the subject does
+# not. A one-line Why: is enough for a small, obvious change.
 #
 # Why: the problem with the current code, and why this way rather than
 # the obvious alternative. Numbers for any performance, size or cost claim.

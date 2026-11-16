@@ -17,8 +17,10 @@ export const DEFAULTS = {
     maxLength: 72,
   },
   commits: {
-    bodyTypes: ["feat", "fix", "perf"], // these types need a body
-    requireWhy: false, // the body needs a "Why:" paragraph (for bodyTypes)
+    // Commit bodies mirror the PR: every commit explains why. Narrow the list
+    // (e.g. to exempt chore) if a type in your history never needs a why.
+    bodyTypes: "all", // "all", or the types whose commits need a body
+    requireWhy: true, // any body present needs a "Why:" paragraph
     bodyMaxLineLength: 100,
     breakingTrailer: "BREAKING-CHANGE", // the one accepted spelling
     requireBreakingTrailer: true, // a `!` subject needs the trailer
@@ -113,6 +115,9 @@ export function normalizeConfig(raw = {}, where = "config") {
   if (!["conventional", "area"].includes(config.header.style)) fail(`${where}.header.style`, 'is "conventional" or "area"');
   if (config.body.sections !== "templates" && !Array.isArray(config.body.sections)) {
     fail(`${where}.body.sections`, 'is "templates" or a list of headings');
+  }
+  if (config.commits.bodyTypes !== "all" && !Array.isArray(config.commits.bodyTypes)) {
+    fail(`${where}.commits.bodyTypes`, 'is "all" or a list of types');
   }
   if (!Array.isArray(config.rules)) fail(`${where}.rules`, "must be a list");
   config.rules.forEach(checkRule);

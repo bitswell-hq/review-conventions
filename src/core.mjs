@@ -195,10 +195,15 @@ export function checkCommitMessage(message, ctx) {
   const long = lines.slice(1).find((l) => l.length > c.bodyMaxLineLength && !l.includes("://"));
   if (long) add("body-max-line-length", `A body line is ${long.length} characters; wrap at 72 (limit ${c.bodyMaxLineLength}).`);
 
+  // A body is required by type ("all" includes area-style subjects, which
+  // have none); a body that is there must be structured, whatever the type.
   const type = parsed?.type;
-  if (type && c.bodyTypes.includes(type)) {
-    if (!prose.trim()) add("body-required", `A ${type} commit needs a body saying why (trailers alone are not one).`);
-    else if (c.requireWhy && !/^Why:/m.test(prose)) add("body-why", `A ${type} commit needs a "Why:" paragraph.`);
+  const kind = type ? `A ${type} commit` : "This commit";
+  const needsBody = c.bodyTypes === "all" || (type !== undefined && c.bodyTypes.includes(type));
+  if (needsBody && !prose.trim()) {
+    add("body-required", `${kind} needs a body with a "Why:" paragraph (trailers alone are not one); see .gitmessage.`);
+  } else if (prose.trim() && c.requireWhy && !/^Why:/m.test(prose)) {
+    add("body-why", `${kind}'s body has no "Why:" paragraph; structure it as Why: / What changes: / Evidence: (see .gitmessage).`);
   }
 
   for (const heading of findProcessHeadings(body)) add("body-process-heading", `"${heading}" records process, not the change.`);

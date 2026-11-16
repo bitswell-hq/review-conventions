@@ -1,0 +1,16 @@
+docs: describe adoption, warn-to-block, versioning and config
+
+Why: a repository adopts this through one caller workflow and one
+config file, and everything it can express lives in that config. Without
+a reference for each key, rule kind and finding, adopting it means
+reading src/.
+
+What changes: README.md covers adoption (the caller workflow, the
+config, copying the templates), switching warn to block, versioning and
+the workflow inputs, a table of every finding with its rule ID, a
+config reference with nido and drawing_board rule examples, local use
+(commit template, commit-msg hook), and how to add a fixture.
+
+Evidence: the drawing_board rule examples run as config in
+test/core.test.mjs ("README examples").
+

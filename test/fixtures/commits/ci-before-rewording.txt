@@ -1,0 +1,7 @@
+ci: run the tests and check this repository's own PRs
+
+The test workflow runs npm test. The self workflow calls the reusable
+workflow from the PR's own commit, in warn mode, against
+.github/review-conventions.json, so a change is checked by the code it
+changes.
+

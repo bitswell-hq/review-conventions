@@ -141,13 +141,15 @@ Every finding carries a rule ID; the job summary lists them.
 |---|---|
 | `body-leading-blank` | No blank line after the subject |
 | `body-max-line-length` | A body line over `commits.bodyMaxLineLength` (100; URLs exempt) |
-| `body-required` | A `commits.bodyTypes` commit (feat, fix, perf) has no body; trailers alone are not one |
-| `body-why` | With `commits.requireWhy`, the body has no `Why:` paragraph |
+| `body-required` | A commit of a `commits.bodyTypes` type (default: every type) has no body; trailers alone are not one |
+| `body-why` | With `commits.requireWhy` (default on), a body is present but has no `Why:` paragraph, whatever the type |
 | `body-process-heading` | As for the description |
 | `trailer-breaking` | A `!` subject without the breaking-change trailer, or the trailer misspelled (`Breaking-Change:` is ignored by git-cliff and commitlint) |
 | `trailer-case` | A known trailer in the wrong case (`refs:`, `Co-Authored-By:`) |
 
-Commit bodies mirror the PR: `Why:`, `What changes:` and `Evidence:` paragraphs, then trailers such as `Refs:`, `Security:` and `BREAKING-CHANGE:`. See [`templates/.gitmessage`](templates/.gitmessage).
+Commit bodies mirror the PR: a `Why:` paragraph, then `What changes:` and `Evidence:` where they add something, then trailers such as `Refs:`, `Security:` and `BREAKING-CHANGE:`. See [`templates/.gitmessage`](templates/.gitmessage).
+
+**Every commit type needs a body by default, `ci`, `docs` and `chore` included.** A type doesn't tell you whether the change needs explaining: a `ci:` commit that changes a release gate needs a why as much as a `fix:` does. The why is also the part of a commit message most often missing (Tian et al., ICSE 2022). A small, obvious change needs one `Why:` line, not three paragraphs. A repository whose history has a type that never needs a why can narrow `commits.bodyTypes` (for example, to leave out `chore`). Even then, any body a commit does have must still be structured.
 
 PRs from `skip.authors`, or from branches starting with a `skip.branches` prefix, have only their title checked. Bot-written bodies (release PRs, re-pins) are shaped by the workflow that writes them.
 
@@ -164,8 +166,8 @@ All keys are optional; unknown keys are an error.
     "maxLength": 72
   },
   "commits": {
-    "bodyTypes": ["feat", "fix", "perf"],
-    "requireWhy": false,
+    "bodyTypes": "all",            // or the types that need a body, e.g. ["feat", "fix", "perf", "ci", "docs"]
+    "requireWhy": true,            // a body present needs a "Why:" paragraph
     "bodyMaxLineLength": 100,
     "breakingTrailer": "BREAKING-CHANGE",   // the accepted spelling ("BREAKING CHANGE" too, when upper-case)
     "requireBreakingTrailer": true,
