@@ -42,6 +42,23 @@ test("a narrowed bodyTypes exempts a type from needing a body, not from structur
   assert.deepEqual(checkCommitMessage(read("docs-before-rewording.txt"), narrowed).map((f) => f.rule), ["body-required"]);
 });
 
+test("bodyExempt exempts a type and scope from needing a body, not from structuring one", async () => {
+  const exempting = await loadContext(root, "", normalizeConfig({ body: { templates: "templates" }, commits: { bodyExempt: ["chore(deps)", "chore(ci)"] } }));
+  const check = (message) => checkCommitMessage(message, exempting).map((f) => f.rule);
+  assert.deepEqual(check(readFileSync(join(fixtures, "commits", "chore-no-body.txt"), "utf8")), [], "the fixture is chore(deps) with no body");
+  assert.deepEqual(check("chore(deps): bump lockfile"), []);
+  assert.deepEqual(check("chore(deps): bump lockfile\n\nRefs: #12"), [], "trailers alone are fine on an exempt commit");
+  assert.deepEqual(check("chore(release): cut v2"), ["body-required"], "another scope of the same type");
+  assert.deepEqual(check("chore: tidy"), ["body-required"], "no scope");
+  assert.deepEqual(check("build(deps): bump lockfile"), ["body-required"], "the same scope on another type");
+  assert.deepEqual(check("chore(deps,ci): bump lockfile and runner"), [], "every scope exempted");
+  assert.deepEqual(check("chore(deps, ci): bump lockfile and runner"), [], "spaces after commas");
+  assert.deepEqual(check("chore(deps,release): bump and cut"), ["body-required"], "one scope not exempted");
+  assert.deepEqual(check("chore(deps)!: drop node 20"), ["body-required", "trailer-breaking"], "a breaking change is never exempt");
+  assert.deepEqual(check("chore(deps): bump lockfile\n\nBumped it."), ["body-why"], "a body that is there is still structured");
+  assert.deepEqual(check("chore(deps): bump lockfile\n\nWhy: GHSA-xxxx affects the old version."), []);
+});
+
 test("every fixture body and commit message is used", async () => {
   const { readdirSync } = await import("node:fs");
   const used = new Set([...cases.map((c) => c.body), ...commitCases.map((c) => c.message)]);

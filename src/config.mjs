@@ -20,6 +20,9 @@ export const DEFAULTS = {
     // Commit bodies mirror the PR: every commit explains why. Narrow the list
     // (e.g. to exempt chore) if a type in your history never needs a why.
     bodyTypes: "all", // "all", or the types whose commits need a body
+    // `type(scope)` pairs that need no body, e.g. "chore(deps)" for
+    // dependency bumps. A body that is there must still be structured.
+    bodyExempt: [],
     requireWhy: true, // any body present needs a "Why:" paragraph
     bodyMaxLineLength: 100,
     breakingTrailer: "BREAKING-CHANGE", // the one accepted spelling
@@ -98,6 +101,25 @@ function checkRule(rule, i) {
   if (!checks.length) fail(where, "checks nothing: give requireSections, requireFiles, match, notMatch or references");
 }
 
+// Each entry is one `type(scope)` pair naming a known type (and a known scope,
+// when header.scopes lists them). An entry that could never match a commit is
+// an error rather than a silent no-op.
+function checkBodyExempt(config, where) {
+  const { bodyExempt } = config.commits;
+  if (!Array.isArray(bodyExempt)) fail(where, 'is a list of "type(scope)" entries');
+  if (bodyExempt.length && config.header.style !== "conventional") fail(where, 'needs header.style "conventional": area subjects have no type or scope');
+  const { types, scopes } = config.header;
+  for (const entry of bodyExempt) {
+    if (typeof entry === "string" && /^[a-z]+$/.test(entry)) {
+      fail(where, `"${entry}" has no scope; to exempt every ${entry} commit, leave "${entry}" out of commits.bodyTypes instead`);
+    }
+    const m = typeof entry === "string" && entry.match(/^([a-z]+)\(([^(),\s]+)\)$/);
+    if (!m) fail(where, `${JSON.stringify(entry)} is not "type(scope)" with one scope, e.g. "chore(deps)"`);
+    if (!types.includes(m[1])) fail(where, `"${entry}": type "${m[1]}" is not one of: ${types.join(", ")}`);
+    if (scopes && !scopes.includes(m[2])) fail(where, `"${entry}": scope "${m[2]}" is not one of: ${scopes.join(", ")}`);
+  }
+}
+
 // Merges `raw` over DEFAULTS and validates it. `where` names the source in errors.
 export function normalizeConfig(raw = {}, where = "config") {
   const top = Object.keys(DEFAULTS);
@@ -119,6 +141,7 @@ export function normalizeConfig(raw = {}, where = "config") {
   if (config.commits.bodyTypes !== "all" && !Array.isArray(config.commits.bodyTypes)) {
     fail(`${where}.commits.bodyTypes`, 'is "all" or a list of types');
   }
+  checkBodyExempt(config, `${where}.commits.bodyExempt`);
   if (!Array.isArray(config.rules)) fail(`${where}.rules`, "must be a list");
   config.rules.forEach(checkRule);
   return config;
