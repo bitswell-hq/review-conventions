@@ -122,6 +122,24 @@ test("config: defaults, explicit sections, and loud errors", async () => {
   bad({ rules: [{ id: "a", requireFiles: ["x"], when: { path: ["x"] } }] }, /unknown key "path"/);
 });
 
+test("config: commits.bodyExempt is empty by default and refuses entries that cannot match", () => {
+  assert.deepEqual(normalizeConfig({}).commits.bodyExempt, []);
+  assert.deepEqual(normalizeConfig({ commits: { bodyExempt: ["chore(deps)", "build(deps)"] } }).commits.bodyExempt, ["chore(deps)", "build(deps)"]);
+  const bad = (bodyExempt, re, header) => assert.throws(() => normalizeConfig({ header, commits: { bodyExempt } }), re);
+  bad("chore(deps)", /bodyExempt: is a list/);
+  bad(["chore"], /"chore" has no scope; .* commits\.bodyTypes/);
+  bad(["chore()"], /is not "type\(scope\)"/);
+  bad(["chore(deps,ci)"], /with one scope/);
+  bad(["chore(deps"], /is not "type\(scope\)"/);
+  bad(["Chore(deps)"], /is not "type\(scope\)"/);
+  bad(["chore(deps)!"], /is not "type\(scope\)"/);
+  bad([7], /7 is not "type\(scope\)"/);
+  bad(["chores(deps)"], /type "chores" is not one of/);
+  bad(["chore(dep)"], /scope "dep" is not one of: deps, ci/, { scopes: ["deps", "ci"] });
+  bad(["chore(deps)"], /needs header\.style "conventional"/, { style: "area" });
+  assert.doesNotThrow(() => normalizeConfig({ header: { style: "area" }, commits: { bodyExempt: [] } }));
+});
+
 test("mode: warn never fails, block fails ready PRs only", () => {
   const log = console.log;
   console.log = () => {};

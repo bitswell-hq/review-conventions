@@ -202,10 +202,14 @@ export function checkCommitMessage(message, ctx, commit = {}) {
   if (long) add("body-max-line-length", `A body line is ${long.length} characters; wrap at 72 (limit ${c.bodyMaxLineLength}).`);
 
   // A body is required by type ("all" includes area-style subjects, which
-  // have none); a body that is there must be structured, whatever the type.
+  // have none), unless bodyExempt names the type with every one of the
+  // commit's scopes; a `!` commit is never exempt. A body that is there must
+  // be structured, whatever the type.
   const type = parsed?.type;
   const kind = type ? `A ${type} commit` : "This commit";
-  const needsBody = c.bodyTypes === "all" || (type !== undefined && c.bodyTypes.includes(type));
+  const scopes = parsed?.scope?.split(",").map((s) => s.trim()) ?? [];
+  const exempt = scopes.length > 0 && !parsed.bang && scopes.every((s) => c.bodyExempt.includes(`${type}(${s})`));
+  const needsBody = !exempt && (c.bodyTypes === "all" || (type !== undefined && c.bodyTypes.includes(type)));
   if (needsBody && !prose.trim()) {
     add("body-required", `${kind} needs a body with a "Why:" paragraph (trailers alone are not one); see .gitmessage.`);
   } else if (prose.trim() && c.requireWhy && !/^Why:/m.test(prose)) {

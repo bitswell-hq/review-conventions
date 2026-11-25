@@ -141,7 +141,7 @@ Every finding carries a rule ID; the job summary lists them.
 |---|---|
 | `body-leading-blank` | No blank line after the subject |
 | `body-max-line-length` | A body line over `commits.bodyMaxLineLength` (100; URLs exempt) |
-| `body-required` | A commit of a `commits.bodyTypes` type (default: every type) has no body; trailers alone are not one |
+| `body-required` | A commit of a `commits.bodyTypes` type (default: every type) has no body, unless `commits.bodyExempt` names its type and scope; trailers alone are not one |
 | `body-why` | With `commits.requireWhy` (default on), a body is present but has no `Why:` paragraph, whatever the type |
 | `body-process-heading` | As for the description |
 | `trailer-breaking` | A `!` subject without the breaking-change trailer, or the trailer misspelled (`Breaking-Change:` is ignored by git-cliff and commitlint) |
@@ -150,6 +150,20 @@ Every finding carries a rule ID; the job summary lists them.
 Commit bodies mirror the PR: a `Why:` paragraph, then `What changes:` and `Evidence:` where they add something, then trailers such as `Refs:`, `Security:` and `BREAKING-CHANGE:`. See [`templates/.gitmessage`](templates/.gitmessage).
 
 **Every commit type needs a body by default, `ci`, `docs` and `chore` included.** A type doesn't tell you whether the change needs explaining: a `ci:` commit that changes a release gate needs a why as much as a `fix:` does. The why is also the part of a commit message most often missing (Tian et al., ICSE 2022). A small, obvious change needs one `Why:` line, not three paragraphs. A repository whose history has a type that never needs a why can narrow `commits.bodyTypes` (for example, to leave out `chore`). Even then, any body a commit does have must still be structured.
+
+To exempt one scope of a type rather than the whole type, list `type(scope)` pairs in `commits.bodyExempt`. Routine dependency bumps are the usual case:
+
+```json
+{ "commits": { "bodyExempt": ["chore(deps)"] } }
+```
+
+`chore(deps): bump the lockfile` then needs no body, while `chore(release): …` and `build(deps): …` still do. An explanation is still worth adding when there is context, such as a security advisory behind the bump. The matching rules:
+
+- **Exact type and exact scope.** `chore(deps)` doesn't cover `chore`, `chore(deps-dev)` or `build(deps)`.
+- **Every scope must be exempted.** `chore(deps,ci)` is exempt only when both `chore(deps)` and `chore(ci)` are listed.
+- **A `!` commit is never exempt.** A breaking change needs its why.
+- **Only the missing body is exempted.** A body that is there must still have its `Why:` paragraph, as with a narrowed `bodyTypes`.
+- **An entry that can't match is a config error**: a bare type (narrow `bodyTypes` instead), more than one scope, an unknown type, a scope missing from `header.scopes` when that is a list, or any entry under `"style": "area"`.
 
 PRs from `skip.authors`, or from branches starting with a `skip.branches` prefix, have only their title checked. Bot-written bodies (release PRs, re-pins) are shaped by the workflow that writes them.
 
@@ -167,6 +181,7 @@ All keys are optional; unknown keys are an error.
   },
   "commits": {
     "bodyTypes": "all",            // or the types that need a body, e.g. ["feat", "fix", "perf", "ci", "docs"]
+    "bodyExempt": [],              // type(scope) pairs that need no body, e.g. ["chore(deps)"]
     "requireWhy": true,            // a body present needs a "Why:" paragraph
     "bodyMaxLineLength": 100,
     "breakingTrailer": "BREAKING-CHANGE",   // the accepted spelling ("BREAKING CHANGE" too, when upper-case)
